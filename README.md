@@ -919,7 +919,7 @@ aws logs tail /aws/dynamodb/gpu-reservation --follow
 - **GitHub Discussions**: 質問・アイデア共有
 - **Wiki**: 詳細な技術仕様・FAQ
 
-**作成者**: Atsunori　Nagya
+**作成者**: Atsunori　Nagaya
 **最終更新**: 2025年6月14日  
 **バージョン**: v1.0.0
 
