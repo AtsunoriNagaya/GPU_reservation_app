@@ -12,7 +12,12 @@
     "seed:data": "node scripts/seed-data.js",
     "setup:all": "npm run setup:db && npm run seed:data",
     "dev:full": "npm run setup:all && npm run dev",
-    "dev:turbo": "next dev --turbo"
+    "dev:turbo": "next dev --turbo",
+    "setup:production": "node scripts/setup-production-db.js",
+    "seed:production": "node scripts/seed-production-data.js",
+    "deploy:production": "npm run setup:production && npm run seed:production",
+    "verify:production": "aws dynamodb list-tables --region ap-northeast-1 | grep gpu-reservation-prod",
+    "logs:production": "aws logs tail /aws/amplify --follow"
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.828.0",

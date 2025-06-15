@@ -1,0 +1,277 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'GPU予約システム - 本番環境監視・アラート設定'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: production
+    Description: 環境名
+  
+  TablePrefix:
+    Type: String
+    Default: gpu-reservation-prod-
+    Description: DynamoDBテーブルプレフィックス
+  
+  NotificationEmail:
+    Type: String
+    Description: アラート通知先メールアドレス
+    Default: admin@gpu-reservation.example.com
+
+Resources:
+  # SNS Topic for Alerts
+  AlertTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub '${Environment}-gpu-reservation-alerts'
+      DisplayName: 'GPU予約システムアラート'
+      
+  AlertTopicSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref AlertTopic
+      Protocol: email
+      Endpoint: !Ref NotificationEmail
+
+  # CloudWatch Dashboard
+  SystemDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub '${Environment}-gpu-reservation-dashboard'
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 0,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  [ "AWS/DynamoDB", "ConsumedReadCapacityUnits", "TableName", "${TablePrefix}reservations" ],
+                  [ ".", "ConsumedWriteCapacityUnits", ".", "." ],
+                  [ ".", "ConsumedReadCapacityUnits", "TableName", "${TablePrefix}users" ],
+                  [ ".", "ConsumedWriteCapacityUnits", ".", "." ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "ap-northeast-1",
+                "title": "DynamoDB 容量使用量",
+                "period": 300
+              }
+            },
+            {
+              "type": "metric",
+              "x": 12,
+              "y": 0,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  [ "AWS/DynamoDB", "UserErrors", "TableName", "${TablePrefix}reservations" ],
+                  [ ".", "SystemErrors", ".", "." ],
+                  [ ".", "UserErrors", "TableName", "${TablePrefix}users" ],
+                  [ ".", "SystemErrors", ".", "." ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "ap-northeast-1",
+                "title": "DynamoDB エラー率",
+                "period": 300
+              }
+            },
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 6,
+              "width": 24,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  [ "AWS/DynamoDB", "SuccessfulRequestLatency", "TableName", "${TablePrefix}reservations", "Operation", "Query" ],
+                  [ "...", "GetItem" ],
+                  [ "...", "PutItem" ],
+                  [ "...", "UpdateItem" ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "ap-northeast-1",
+                "title": "DynamoDB レイテンシー",
+                "period": 300,
+                "stat": "Average"
+              }
+            }
+          ]
+        }
+
+  # CloudWatch Alarms
+
+  # DynamoDB読み取り容量アラート
+  ReadCapacityAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${Environment}-dynamodb-read-capacity-high'
+      AlarmDescription: 'DynamoDB読み取り容量使用率が高い'
+      MetricName: ConsumedReadCapacityUnits
+      Namespace: AWS/DynamoDB
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 1000
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: TableName
+          Value: !Sub '${TablePrefix}reservations'
+      AlarmActions:
+        - !Ref AlertTopic
+      TreatMissingData: notBreaching
+
+  # DynamoDB書き込み容量アラート
+  WriteCapacityAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${Environment}-dynamodb-write-capacity-high'
+      AlarmDescription: 'DynamoDB書き込み容量使用率が高い'
+      MetricName: ConsumedWriteCapacityUnits
+      Namespace: AWS/DynamoDB
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 500
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: TableName
+          Value: !Sub '${TablePrefix}reservations'
+      AlarmActions:
+        - !Ref AlertTopic
+      TreatMissingData: notBreaching
+
+  # DynamoDBエラー率アラート
+  ErrorRateAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${Environment}-dynamodb-error-rate-high'
+      AlarmDescription: 'DynamoDBエラー率が高い'
+      MetricName: UserErrors
+      Namespace: AWS/DynamoDB
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 10
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: TableName
+          Value: !Sub '${TablePrefix}reservations'
+      AlarmActions:
+        - !Ref AlertTopic
+      TreatMissingData: notBreaching
+
+  # DynamoDBレイテンシーアラート
+  LatencyAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${Environment}-dynamodb-latency-high'
+      AlarmDescription: 'DynamoDBレイテンシーが高い'
+      MetricName: SuccessfulRequestLatency
+      Namespace: AWS/DynamoDB
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 3
+      Threshold: 100
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: TableName
+          Value: !Sub '${TablePrefix}reservations'
+        - Name: Operation
+          Value: Query
+      AlarmActions:
+        - !Ref AlertTopic
+      TreatMissingData: notBreaching
+
+  # Custom Metric Filter for Application Logs
+  GeminiAPIErrorFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Sub '/aws/amplify/${Environment}-gpu-reservation'
+      FilterPattern: 'ERROR Gemini'
+      MetricTransformations:
+        - MetricNamespace: 'GPUReservation/Application'
+          MetricName: 'GeminiAPIErrors'
+          MetricValue: '1'
+          DefaultValue: 0
+
+  # Gemini APIエラーアラート
+  GeminiAPIErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${Environment}-gemini-api-errors'
+      AlarmDescription: 'Gemini APIエラーが頻発'
+      MetricName: GeminiAPIErrors
+      Namespace: GPUReservation/Application
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        - !Ref AlertTopic
+      TreatMissingData: notBreaching
+
+  # Reservation Creation Rate Monitor
+  ReservationRateFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Sub '/aws/amplify/${Environment}-gpu-reservation'
+      FilterPattern: 'reservation created'
+      MetricTransformations:
+        - MetricNamespace: 'GPUReservation/Business'
+          MetricName: 'ReservationsCreated'
+          MetricValue: '1'
+          DefaultValue: 0
+
+  # 予約作成率監視
+  ReservationRateAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${Environment}-reservation-rate-low'
+      AlarmDescription: '予約作成率が異常に低い'
+      MetricName: ReservationsCreated
+      Namespace: GPUReservation/Business
+      Statistic: Sum
+      Period: 3600
+      EvaluationPeriods: 2
+      Threshold: 1
+      ComparisonOperator: LessThanThreshold
+      AlarmActions:
+        - !Ref AlertTopic
+      TreatMissingData: breaching
+
+Outputs:
+  DashboardURL:
+    Description: 'CloudWatch Dashboard URL'
+    Value: !Sub 'https://console.aws.amazon.com/cloudwatch/home?region=ap-northeast-1#dashboards:name=${Environment}-gpu-reservation-dashboard'
+    Export:
+      Name: !Sub '${Environment}-dashboard-url'
+
+  AlertTopicArn:
+    Description: 'SNS Topic ARN for alerts'
+    Value: !Ref AlertTopic
+    Export:
+      Name: !Sub '${Environment}-alert-topic-arn'
+
+  MonitoringSetup:
+    Description: '監視設定完了'
+    Value: !Sub |
+      監視・アラート設定が完了しました。
+      
+      📊 Dashboard: https://console.aws.amazon.com/cloudwatch/home?region=ap-northeast-1#dashboards:name=${Environment}-gpu-reservation-dashboard
+      
+      🔔 アラート通知先: ${NotificationEmail}
+      
+      📈 監視項目:
+      - DynamoDB容量使用率
+      - エラー率・レイテンシー
+      - Gemini APIエラー
+      - 予約作成率
+      
+      設定完了後、メール確認でSNS購読を承認してください。
