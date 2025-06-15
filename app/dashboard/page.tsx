@@ -1,5 +1,6 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
@@ -30,16 +31,57 @@ interface Reservation {
   aiReason?: string
 }
 
-interface DashboardProps {
-  reservations: Reservation[]
-}
+export default function DashboardPage() {
+  const [reservations, setReservations] = useState<Reservation[]>([])
+  const [isLoading, setIsLoading] = useState(true)
 
-export default function Dashboard({ reservations }: DashboardProps) {
-  // 統計データの計算
-  const totalReservations = reservations.length
-  const activeReservations = reservations.filter((r) => r.status === "active").length
-  const pendingReservations = reservations.filter((r) => r.status === "pending").length
-  const approvedReservations = reservations.filter((r) => r.status === "approved").length
+  useEffect(() => {
+    const fetchReservations = async () => {
+      try {
+        const response = await fetch('/api/reservations')
+        if (response.ok) {
+          const data = await response.json()
+          setReservations(data.reservations || [])
+        } else {
+          console.warn('Failed to fetch reservations')
+          setReservations([])
+        }
+      } catch (error) {
+        console.warn('Error fetching reservations:', error)
+        setReservations([])
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchReservations()
+  }, [])
+
+  // ローディング中の表示
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {[...Array(4)].map((_, i) => (
+            <Card key={i}>
+              <CardHeader>
+                <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
+              </CardHeader>
+              <CardContent>
+                <div className="h-8 bg-gray-200 rounded animate-pulse"></div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  // 統計データの計算（安全にアクセス）
+  const totalReservations = reservations?.length || 0
+  const activeReservations = reservations?.filter((r) => r.status === "active").length || 0
+  const pendingReservations = reservations?.filter((r) => r.status === "pending").length || 0
+  const approvedReservations = reservations?.filter((r) => r.status === "approved").length || 0
 
   // GPU使用率データ
   const gpuUsageData = [

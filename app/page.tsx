@@ -364,7 +364,7 @@ export default function GPUReservationSystem() {
         )}
 
         {/* ダッシュボードタブ */}
-        {activeTab === "dashboard" && <Dashboard reservations={reservations as any} />}
+        {activeTab === "dashboard" && <Dashboard />}
 
         {/* 予約一覧タブ */}
         {activeTab === "list" && <ReservationList reservations={reservations as any} setReservations={setReservations as any} />}

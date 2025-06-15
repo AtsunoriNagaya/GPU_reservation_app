@@ -20,12 +20,6 @@ const nextConfig = {
       },
     },
   },
-  // 開発時のパフォーマンス向上
-  swcMinify: true,
-  // HMR 設定
-  devIndicators: {
-    buildActivity: true,
-  },
 }
 
 export default nextConfig
