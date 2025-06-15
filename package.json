@@ -1,6 +1,15 @@
 {
-  "name": "my-v0-project",
-  "version": "0.1.0",
+  "name": "gpu-reservation-system",
+  "version": "1.0.0",
+  "description": "AI-Powered GPU Reservation System with Gemini 2.0 Flash",
+  "keywords": ["gpu", "reservation", "ai", "gemini", "next.js", "dynamodb", "research"],
+  "author": "Atsunori Nagaya",
+  "license": "MIT",
+  "homepage": "https://gpu-reservation-app-opal.vercel.app/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/AtsunoriNagaya/GPU_reservation_app.git"
+  },
   "private": true,
   "scripts": {
     "dev": "next dev --turbo",
